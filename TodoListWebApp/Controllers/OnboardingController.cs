@@ -31,30 +31,35 @@ namespace TodoListWebApp.Controllers
 		[ValidateAntiForgeryToken]
 		public ActionResult SignUp([Bind(Include = "ID,Name,AdminConsented")] Tenant tenant)
 		{
-			// generate a random value to identify the request
-			string stateMarker = Guid.NewGuid().ToString();
-			// store it in the temporary entry for the tenant, we'll use it later to assess if the request was originated from us
-			// this is necessary if we want to prevent attackers from provisioning themselves to access our app without having gone through our onboarding process (e.g. payments, etc)
-			tenant.IssValue = stateMarker;
-			tenant.Created = DateTime.Now;
-			db.Tenants.Add(tenant);
-			db.SaveChanges();
+            // generate a random value to identify the request
+            var stateMarker = Guid.NewGuid().ToString();
+            // store it in the temporary entry for the tenant, we'll use it later to assess if the request was originated from us
+            // this is necessary if we want to prevent attackers from provisioning themselves to access our app without having gone through our onboarding process (e.g. payments, etc)
+            tenant.IssValue = stateMarker;
+            tenant.Created = DateTime.Now;
+            db.Tenants.Add(tenant);
+            db.SaveChanges();
 
-			//create an OAuth2 request, using the web app as the client.
-			//this will trigger a consent flow that will provision the app in the target tenant
-			string authorizationRequest = string.Format(
-					"https://login.windows.net/common/oauth2/authorize?response_type=code&client_id={0}&resource={1}&redirect_uri={2}&state={3}",
-					 Uri.EscapeDataString(ConfigurationManager.AppSettings["ida:ClientID"]),
-					 Uri.EscapeDataString("https://graph.windows.net"),
-					 Uri.EscapeDataString(Request.Url.GetLeftPart(UriPartial.Authority) + "/Onboarding/ProcessCode"),
-					 Uri.EscapeDataString(stateMarker)
-					 );
-			//if the prospect customer wants to provision the app for all users in his/her tenant, the request must be modified accordingly
-			if (tenant.AdminConsented)
-				authorizationRequest += string.Format("&prompt={0}", Uri.EscapeDataString("admin_consent"));
-			// send the user to consent
-			return new RedirectResult(authorizationRequest);
-		}
+            //create an OAuth2 request, using the web app as the client.
+            //this will trigger a consent flow that will provision the app in the target tenant
+            var clientId = Uri.EscapeDataString(ConfigurationManager.AppSettings["ida:ClientID"]);
+            var resource = Uri.EscapeDataString("https://graph.windows.net");
+            var redirectUri = Uri.EscapeDataString(Request.Url.GetLeftPart(UriPartial.Authority) + "/Onboarding/ProcessCode");
+            var adminConstent = Uri.EscapeDataString("admin_consent");
+            var state = Uri.EscapeDataString(stateMarker);
+
+            string authorizationRequest =
+                $"https://login.windows.net/common/oauth2/authorize?response_type=code&client_id={clientId}&resource={resource}&redirect_uri={redirectUri}&state={state}";
+
+            //if the prospect customer wants to provision the app for all users in his/her tenant, the request must be modified accordingly
+            if (tenant.AdminConsented)
+            {
+                authorizationRequest += $"&prompt={adminConstent}";
+            }
+
+            // send the user to consent
+            return new RedirectResult(authorizationRequest);
+        }
 
 		// GET: /TOnboarding/ProcessCode
 		public ActionResult ProcessCode(string code, string error, string error_description, string resource, string state)
